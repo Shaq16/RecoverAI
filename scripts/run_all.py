@@ -70,6 +70,9 @@ def llm_accounting(b3: evaluate.PolicyMetrics, router: B3Router,
         "accepted_by_gates": accepted,
         "acceptance_rate": accepted / nodes if nodes else 0.0,
         "unique_client_calls": router.client.calls,
+        # AnthropicLLMClient increments .errors on every API error, refusal,
+        # or unparseable response. MockLLMClient has no such attribute.
+        "llm_errors": getattr(router.client, "errors", 0),
         "llm_unit_cost": unit,
         "llm_cost": cost,
         "value_vs_b2": gain,
@@ -129,6 +132,40 @@ def write_b3_audit(path: str, b3: evaluate.PolicyMetrics, router: B3Router) -> i
     return written
 
 
+def real_model_failure(acct: dict, backend: str) -> str:
+    """
+    Return a failure message when a real-model run must not be trusted, or "".
+
+    Every exception path in AnthropicLLMClient -- API error, rate limit,
+    refusal, unparseable response -- returns a decision marked `malformed`,
+    which the schema gate then rejects, which falls back to B2. That is correct
+    behaviour for a single flaky call and catastrophic as a reporting default:
+    a run whose key is wrong or which is rate-limited completes normally and
+    prints a plausible B3 table that is actually 100% B2 fallback. It would read
+    as "the real model performs identically to strong rules" -- a conclusion,
+    not an error.
+
+    So any error at all invalidates the run as a real-model benchmark. The
+    caller must refuse to write results and exit non-zero. The mock backend
+    cannot error and is never gated here.
+    """
+    if backend == "mock":
+        return ""
+    errors = acct.get("llm_errors", 0)
+    if not errors:
+        return ""
+    nodes = acct.get("decision_nodes_routed", 0)
+    return (
+        f"{errors} of {nodes} LLM calls failed (API error, refusal, or "
+        f"unparseable response).\n"
+        f"  Each failure fell back to B2, so the B3 figures above are NOT a "
+        f"real-model result --\n"
+        f"  they are partly or wholly the rules baseline wearing a model's "
+        f"name. Results were\n"
+        f"  NOT written. Fix the cause and re-run before citing any number."
+    )
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=1200)
@@ -186,6 +223,7 @@ def main():
           f" / {acct['decision_nodes_routed']}"
           f"  ({100*acct['acceptance_rate']:.0f}%)")
     print(f"  unique client calls (cached)   {acct['unique_client_calls']}")
+    print(f"  failed LLM calls               {acct['llm_errors']}")
     print()
     print(f"  B2 regret                      INR {acct['regret_b2']:>10,.0f}")
     print(f"  B3 regret                      INR {acct['regret_b3']:>10,.0f}")
@@ -198,6 +236,14 @@ def main():
     print("  " + "-" * 52)
     print(f"  NET BENEFIT vs B2              INR {acct['net_benefit_vs_b2']:>10,.0f}"
           f"   {'PAYS FOR ITSELF' if acct['net_benefit_vs_b2'] > 0 else 'DOES NOT PAY'}")
+
+    failure = real_model_failure(acct, client.name)
+    if failure:
+        print("\n" + "=" * 78)
+        print("RUN REJECTED -- this is not a valid real-model benchmark")
+        print("=" * 78)
+        print(f"  {failure}")
+        return 2
 
     unver = compliance.unverified_constants(cfg)
     if unver:

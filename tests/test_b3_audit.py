@@ -35,7 +35,8 @@ from src.schema import (
     ABANDON, RETRY, RETRY_LATER, REQUEST_PAYMENT_UPDATE,
     GATEWAY_TIMEOUT,
 )
-from scripts.run_all import llm_accounting, write_b3_audit
+from scripts.run_all import (llm_accounting, real_model_failure,
+                            write_b3_audit)
 
 
 @pytest.fixture(scope="module")
@@ -261,3 +262,76 @@ def test_cost_accounting_is_deterministic(env):
                                bootstrap=0)
         runs.append(llm_accounting(b3, router, b2, econ))
     assert runs[0] == runs[1] == runs[2]
+
+
+# ---------------------------------------------------------------------------
+# Real-model run must fail loudly, not silently become the rules baseline
+# ---------------------------------------------------------------------------
+
+class _ErroringClient(LLMClient):
+    """Stands in for AnthropicLLMClient after the API has failed."""
+
+    name = "anthropic"
+
+    def __init__(self, errors=0):
+        super().__init__()
+        self.errors = errors
+
+    def _decide(self, payload):
+        return LLMDecision(ABANDON, 0, 0.0, "api error", "anthropic",
+                           malformed=True)
+
+
+def test_accounting_surfaces_llm_error_count(env):
+    """The count must reach the report; it was previously incremented and dropped."""
+    econ, cfg = env
+    rec = _gateway_timeout_record()
+    router = _TwoStepRouter()
+    router.client = _ErroringClient(errors=7)
+    b3 = evaluate.evaluate([rec], router, name="B3 router", econ=econ, cfg=cfg,
+                           bootstrap=0, collect_audit=True)
+    b2 = evaluate.evaluate([rec], B2Rules(econ, cfg), econ=econ, cfg=cfg,
+                           bootstrap=0)
+    assert llm_accounting(b3, router, b2, econ)["llm_errors"] == 7
+
+
+def test_accounting_defaults_to_zero_for_a_client_without_errors(env):
+    """MockLLMClient has no .errors attribute; the lookup must not blow up."""
+    econ, cfg = env
+    rec = _gateway_timeout_record()
+    router = _TwoStepRouter()
+    assert not hasattr(router.client, "errors")
+    b3 = evaluate.evaluate([rec], router, name="B3 router", econ=econ, cfg=cfg,
+                           bootstrap=0, collect_audit=True)
+    b2 = evaluate.evaluate([rec], B2Rules(econ, cfg), econ=econ, cfg=cfg,
+                           bootstrap=0)
+    assert llm_accounting(b3, router, b2, econ)["llm_errors"] == 0
+
+
+def test_real_model_run_is_rejected_when_any_call_failed():
+    """
+    One failed call is enough. A partially-failed run is a blend of the model
+    and the rules baseline, and there is no honest way to label that.
+    """
+    msg = real_model_failure({"llm_errors": 1, "decision_nodes_routed": 707},
+                             "anthropic")
+    assert msg
+    assert "1 of 707" in msg
+    assert "NOT a" in msg and "NOT written" in msg
+
+
+def test_real_model_run_is_accepted_when_no_call_failed():
+    assert real_model_failure({"llm_errors": 0, "decision_nodes_routed": 707},
+                              "anthropic") == ""
+
+
+def test_mock_backend_is_never_gated_by_the_error_check():
+    """The mock cannot error; gating it would break the offline path."""
+    assert real_model_failure({"llm_errors": 0, "decision_nodes_routed": 707},
+                              "mock") == ""
+    assert real_model_failure({"llm_errors": 99, "decision_nodes_routed": 707},
+                              "mock") == ""
+
+
+def test_failure_check_tolerates_a_missing_error_key():
+    assert real_model_failure({"decision_nodes_routed": 707}, "anthropic") == ""
