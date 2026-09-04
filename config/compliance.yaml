@@ -1,0 +1,82 @@
+# Compliance constraints for recurring-payment recovery in India.
+#
+# ============================ READ THIS ============================
+# Every value below is marked verified: true|false.
+#
+# The `false` ones are PLACEHOLDERS chosen to be structurally realistic.
+# They must be checked against the primary sources listed under `source`
+# before this project is submitted or shown to anyone. Do not copy numbers
+# from a language model (including the one that scaffolded this file) into
+# the `verified: true` state.
+#
+# The point of this file is that compliance is enforced in code as a
+# deterministic gate, not left to a prompt. The gate is real either way;
+# only the constants need confirming.
+# ===================================================================
+
+retry_limits:
+  max_attempts_per_cycle:
+    value: 4
+    verified: false
+    source: "https://www.rbi.org.in/  (search: e-mandate recurring transactions, processing of e-mandate)"
+    note: "Network/scheme rules (NPCI UPI Autopay, card networks) may bind tighter than RBI."
+
+  min_hours_between_attempts:
+    value: 6
+    verified: false
+    source: "Acquirer / scheme retry rules; confirm with Razorpay public docs."
+
+  max_days_from_first_failure:
+    value: 14
+    verified: false
+    source: "Billing-cycle convention; confirm."
+
+pre_debit_notification:
+  # Whether a debit attempt is permitted when no pre-debit notice was sent.
+  required_before_debit:
+    value: true
+    verified: false
+    source: "https://www.rbi.org.in/  (e-mandate framework, pre-transaction notification)"
+  min_hours_before_debit:
+    value: 24
+    verified: false
+    source: "https://www.rbi.org.in/"
+  # Above this ticket size an additional factor of authentication is required,
+  # which a silent retry cannot satisfy.
+  afa_threshold_inr:
+    value: 15000
+    verified: false
+    source: "https://www.rbi.org.in/  (AFA limit for recurring e-mandates; revised more than once)"
+
+customer_messaging:
+  # Commercial communication time window (local time).
+  allowed_hours:
+    start: 9
+    end: 21
+    verified: false
+    source: "https://www.trai.gov.in/  (TCCCPR / DLT commercial communication rules)"
+  max_messages_per_episode:
+    value: 2
+    verified: false
+    source: "https://www.trai.gov.in/"
+
+mandate_state:
+  # These are logical, not regulatory: a revoked mandate cannot be debited.
+  block_debit_when_revoked:
+    value: true
+    verified: true
+    source: "Definitional."
+  block_debit_when_expired:
+    value: true
+    verified: true
+    source: "Definitional."
+  block_debit_above_mandate_cap:
+    value: true
+    verified: true
+    source: "Definitional."
+
+disputes:
+  block_debit_when_active_dispute:
+    value: true
+    verified: false
+    source: "Scheme chargeback rules; confirm."

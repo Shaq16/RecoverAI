@@ -1,0 +1,252 @@
+{
+  "split": "test",
+  "n": 564,
+  "seed": 7,
+  "unverified_constants": [
+    "retry_limits.max_attempts_per_cycle",
+    "retry_limits.min_hours_between_attempts",
+    "retry_limits.max_days_from_first_failure",
+    "pre_debit_notification.required_before_debit",
+    "pre_debit_notification.min_hours_before_debit",
+    "pre_debit_notification.afa_threshold_inr",
+    "customer_messaging.allowed_hours",
+    "customer_messaging.max_messages_per_episode",
+    "disputes.block_debit_when_active_dispute"
+  ],
+  "policies": [
+    {
+      "policy": "B0 do-nothing",
+      "n": 564,
+      "policy_value": 0.0,
+      "oracle_value": 123583.71,
+      "share_of_oracle": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "root_agreement": 0.1507,
+      "abandon_rate": 1.0,
+      "denied_per_record": 0.0,
+      "waste_inr": 0,
+      "regret_inr": 123583.71,
+      "per_slice": {
+        "ordinary": {
+          "slice": "ordinary",
+          "n": 316,
+          "policy_value": 0.0,
+          "oracle_value": 76228.66,
+          "share_of_oracle": 0.0,
+          "root_agreement": 0.057,
+          "abandon_rate": 1.0,
+          "denied_per_record": 0.0,
+          "waste_inr": 0,
+          "regret_inr": 76228.66
+        },
+        "looks_alive_is_dead": {
+          "slice": "looks_alive_is_dead",
+          "n": 61,
+          "policy_value": 0.0,
+          "oracle_value": 4643.72,
+          "share_of_oracle": 0.0,
+          "root_agreement": 0.2295,
+          "abandon_rate": 1.0,
+          "denied_per_record": 0.0,
+          "waste_inr": 0,
+          "regret_inr": 4643.72
+        },
+        "compliance_trap": {
+          "slice": "compliance_trap",
+          "n": 56,
+          "policy_value": 0.0,
+          "oracle_value": 30235.48,
+          "share_of_oracle": 0.0,
+          "root_agreement": 0.0536,
+          "abandon_rate": 1.0,
+          "denied_per_record": 0.0,
+          "waste_inr": 0,
+          "regret_inr": 30235.48
+        },
+        "cost_trap": {
+          "slice": "cost_trap",
+          "n": 62,
+          "policy_value": 0.0,
+          "oracle_value": 34.17,
+          "share_of_oracle": 0.0,
+          "root_agreement": 0.7581,
+          "abandon_rate": 1.0,
+          "denied_per_record": 0.0,
+          "waste_inr": 0,
+          "regret_inr": 34.17
+        },
+        "ambiguous_dnh": {
+          "slice": "ambiguous_dnh",
+          "n": 69,
+          "policy_value": 0.0,
+          "oracle_value": 12441.68,
+          "share_of_oracle": 0.0,
+          "root_agreement": 0.0435,
+          "abandon_rate": 1.0,
+          "denied_per_record": 0.0,
+          "waste_inr": 0,
+          "regret_inr": 12441.68
+        }
+      }
+    },
+    {
+      "policy": "B1 naive retry",
+      "n": 564,
+      "policy_value": 41215.91,
+      "oracle_value": 123583.71,
+      "share_of_oracle": 0.3335,
+      "ci95": [
+        0.2618,
+        0.4095
+      ],
+      "root_agreement": 0.3528,
+      "abandon_rate": 0.3848,
+      "denied_per_record": 0.4486,
+      "waste_inr": 159.86,
+      "regret_inr": 82367.81,
+      "per_slice": {
+        "ordinary": {
+          "slice": "ordinary",
+          "n": 316,
+          "policy_value": 30479.38,
+          "oracle_value": 76228.66,
+          "share_of_oracle": 0.3998,
+          "root_agreement": 0.3639,
+          "abandon_rate": 0.3513,
+          "denied_per_record": 0.3924,
+          "waste_inr": 11.86,
+          "regret_inr": 45749.29
+        },
+        "looks_alive_is_dead": {
+          "slice": "looks_alive_is_dead",
+          "n": 61,
+          "policy_value": -312.0,
+          "oracle_value": 4643.72,
+          "share_of_oracle": -0.0672,
+          "root_agreement": 0.0164,
+          "abandon_rate": 0.1311,
+          "denied_per_record": 0.1803,
+          "waste_inr": 76.0,
+          "regret_inr": 4955.72
+        },
+        "compliance_trap": {
+          "slice": "compliance_trap",
+          "n": 56,
+          "policy_value": 1774.69,
+          "oracle_value": 30235.48,
+          "share_of_oracle": 0.0587,
+          "root_agreement": 0.1786,
+          "abandon_rate": 0.7857,
+          "denied_per_record": 1.0,
+          "waste_inr": 0,
+          "regret_inr": 28460.8
+        },
+        "cost_trap": {
+          "slice": "cost_trap",
+          "n": 62,
+          "policy_value": -96.0,
+          "oracle_value": 34.17,
+          "share_of_oracle": -2.8093,
+          "root_agreement": 0.5484,
+          "abandon_rate": 0.7258,
+          "denied_per_record": 0.7742,
+          "waste_inr": 72.0,
+          "regret_inr": 130.17
+        },
+        "ambiguous_dnh": {
+          "slice": "ambiguous_dnh",
+          "n": 69,
+          "policy_value": 9369.84,
+          "oracle_value": 12441.68,
+          "share_of_oracle": 0.7531,
+          "root_agreement": 0.5652,
+          "abandon_rate": 0.1304,
+          "denied_per_record": 0.2029,
+          "waste_inr": 0,
+          "regret_inr": 3071.84
+        }
+      }
+    },
+    {
+      "policy": "B2 rules",
+      "n": 564,
+      "policy_value": 121310.62,
+      "oracle_value": 123583.71,
+      "share_of_oracle": 0.9816,
+      "ci95": [
+        0.9747,
+        0.9873
+      ],
+      "root_agreement": 0.7163,
+      "abandon_rate": 0.1099,
+      "denied_per_record": 0.0,
+      "waste_inr": 136.22,
+      "regret_inr": 2273.09,
+      "per_slice": {
+        "ordinary": {
+          "slice": "ordinary",
+          "n": 316,
+          "policy_value": 74979.3,
+          "oracle_value": 76228.66,
+          "share_of_oracle": 0.9836,
+          "root_agreement": 0.788,
+          "abandon_rate": 0.038,
+          "denied_per_record": 0.0,
+          "waste_inr": 17.62,
+          "regret_inr": 1249.37
+        },
+        "looks_alive_is_dead": {
+          "slice": "looks_alive_is_dead",
+          "n": 61,
+          "policy_value": 3950.41,
+          "oracle_value": 4643.72,
+          "share_of_oracle": 0.8507,
+          "root_agreement": 0.1639,
+          "abandon_rate": 0.0164,
+          "denied_per_record": 0.0,
+          "waste_inr": 99.8,
+          "regret_inr": 693.3
+        },
+        "compliance_trap": {
+          "slice": "compliance_trap",
+          "n": 56,
+          "policy_value": 30200.45,
+          "oracle_value": 30235.48,
+          "share_of_oracle": 0.9988,
+          "root_agreement": 0.875,
+          "abandon_rate": 0.0536,
+          "denied_per_record": 0.0,
+          "waste_inr": 5.47,
+          "regret_inr": 35.04
+        },
+        "cost_trap": {
+          "slice": "cost_trap",
+          "n": 62,
+          "policy_value": 9.59,
+          "oracle_value": 34.17,
+          "share_of_oracle": 0.2807,
+          "root_agreement": 0.8226,
+          "abandon_rate": 0.6935,
+          "denied_per_record": 0.0,
+          "waste_inr": 13.32,
+          "regret_inr": 24.58
+        },
+        "ambiguous_dnh": {
+          "slice": "ambiguous_dnh",
+          "n": 69,
+          "policy_value": 12170.87,
+          "oracle_value": 12441.68,
+          "share_of_oracle": 0.9782,
+          "root_agreement": 0.6522,
+          "abandon_rate": 0.0435,
+          "denied_per_record": 0.0,
+          "waste_inr": 0,
+          "regret_inr": 270.81
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+# Intervention economics (INR). Frozen before any policy was written.
+#
+# These are order-of-magnitude estimates, not quoted rates. They are declared
+# here so that every policy is scored under identical assumptions and so that
+# a reader can re-run the benchmark with their own numbers.
+
+costs:
+  # Cost of a single retry attempt against the gateway.
+  retry_attempt: 2.0
+
+  # Cost of asking a customer to update their payment method
+  # (message send + support load amortised).
+  request_payment_update: 6.0
+
+  # Marginal cost of one LLM decision. Only B3 incurs this.
+  # Measure this empirically on Sep 3 and update.
+  llm_decision: 0.35
+
+  # Cost of abandoning. Zero direct cost, but see churn_penalty below.
+  abandon: 0.0
+
+# Charged when a policy abandons a payment the oracle shows was recoverable.
+# Represents the downstream value lost, not just this month's invoice.
+# Set to 0 to disable and report pure single-invoice economics.
+churn_penalty_multiplier: 0.0
+
+# Fraction of the invoice retained as margin. Recovering INR 100 of GMV is
+# not worth INR 100 of effort. Used for the cost-trap slice to be meaningful.
+contribution_margin: 0.35

@@ -1,0 +1,12 @@
+# environments
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# generated benchmark data -- reproducible via `python -m src.generate`
+data/*.jsonl
+
+# local noise
+.DS_Store
+.pytest_cache/
