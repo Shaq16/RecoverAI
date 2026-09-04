@@ -51,7 +51,7 @@ has to earn.
 | B0 | Do nothing. Establishes the passive floor. |
 | B1 | Naive retry: 3 attempts, 24h apart, reason-blind. |
 | B2 | Reason-aware deterministic rules. No LLM. |
-| B3 | RecoverAI. Rules for clear cases, LLM for the ambiguous tail. |
+| B3 | RecoverAI. Rules for clear cases, LLM for the ambiguous tail. Routes on B2's top-two action-class EV margin; every recommendation passes compliance, economic and retry-budget gates before execution. |
 | B★ | Oracle. Upper bound with full hidden knowledge. |
 
 Scores are reported as **share of oracle-achievable value**, not raw recovery
@@ -104,6 +104,69 @@ codes are deliberately lossy — several true causes collapse into
 Metrics are reported per slice as well as overall, with bootstrap confidence
 intervals, because a 5-point difference on a 60-record slice is noise.
 
+## Results
+
+Test split, n=564, seed 7. Exact evaluation -- no sampling, so these numbers
+reproduce byte-for-byte. Full output in `results/ladder.md`.
+
+| policy | % of oracle | 95% CI | oracle agreement | regret (INR) | waste (INR) |
+|---|---|---|---|---|---|
+| B0 do-nothing | 0.0% | [0.0, 0.0] | 15% | 123,584 | 0 |
+| B1 naive retry | 33.4% | [26.2, 41.0] | 35% | 82,368 | 160 |
+| B2 rules | **98.2%** | [97.5, 98.7] | 72% | 2,273 | 136 |
+| B3 router | 96.6% | [94.6, 98.0] | 74% | 4,167 | 136 |
+| B* oracle | 100% | -- | 100% | 0 | -- |
+
+### B3 does not beat B2, and that is the result
+
+Routing the ambiguous tail to an LLM **lost INR 2,067 net** against B2. We are
+reporting it rather than tuning until it inverts.
+
+The loss decomposes cleanly, and not in the direction you would guess:
+
+| what the LLM changed | n | value delta | oracle agreement B2 -> B3 |
+|---|---|---|---|
+| same action class, different timing | 72 | **-1,477** | 64% -> 64% |
+| different action class | 60 | -373 | **37% -> 55%** |
+| identical to B2 | 27 | -46 | 85% -> 85% |
+| rejected by the gates, fell back to B2 | 83 | 0 | 49% -> 49% |
+
+When the model changed *which lever to pull* it was right substantially more
+often -- oracle agreement on those records rose 18 points -- and still lost
+money. The damage came from *timing*: it proposes sensible round numbers, while
+B2 grid-searches the delay against its salary-cycle belief, and on this
+benchmark the delay is worth more than the verb.
+
+The negative result is not an artefact of the routing threshold. B3 fails to
+break even at every threshold tested, and gets monotonically worse as more
+traffic is routed:
+
+| relative-margin threshold | routed | B3 % of oracle | net vs B2 (INR) |
+|---|---|---|---|
+| 0.02 | 33.3% | 97.3% | -1,159 |
+| 0.05 | 42.4% | 97.2% | -1,264 |
+| 0.10 | 44.5% | 96.7% | -2,007 |
+| **0.15 (pre-registered)** | 46.5% | 96.6% | **-2,067** |
+| 0.30 | 51.6% | 96.2% | -2,569 |
+| 0.60 | 55.5% | 96.2% | -2,697 |
+
+Two caveats stated plainly. These runs use `MockLLMClient`, a deterministic
+offline stand-in; the real-model number is not yet measured, and
+`AnthropicLLMClient` is written but unexercised. And share-of-oracle is a weak
+discriminator here -- degrading B2's belief model badly moves it 98.2% -> 98.1%
+-- which is why oracle agreement, regret and waste are reported alongside it.
+
+### What the benchmark says about the thesis
+
+The thesis was that AI should earn its cost only where deterministic rules run
+out of certainty. On this benchmark the honest reading is stronger than
+planned: **the rules do not run out of certainty often enough to pay for the
+model.** A well-built rules engine leaves INR 2,273 of regret across 564
+records; an LLM would have to capture 7.6% of that just to cover its own
+invocation cost, and instead it destroys value. The router is still the right
+architecture -- it is what makes the cost visible and boundable -- but on this
+world model the correct configuration routes nothing.
+
 ## Compliance
 
 `config/compliance.yaml` holds every constraint as a deterministic constant with
@@ -125,10 +188,11 @@ data generation run, so the gap is impossible to forget.
 - [x] Oracle (expectimax over the frozen model, obeys the same gates)
 - [x] Dataset generator with 4 adversarial slices
 - [x] Degeneracy validation
-- [ ] Evaluation harness and metrics
-- [ ] B0 / B1 / B2
-- [ ] B3 + audit trail
-- [ ] Results, charts, video
+- [x] Evaluation harness and metrics (exact, not sampled)
+- [x] B0 / B1 / B2
+- [x] B3 + audit trail
+- [ ] Charts, video
+- [ ] Verify the compliance constants marked `verified: false`
 
 ## Running
 
@@ -139,13 +203,15 @@ pip install -r requirements.txt
 pytest tests/                                 # observable/hidden separation must hold
 python -m src.generate --n 1200 --seed 7      # writes data/{train,test}.jsonl
 python -m scripts.validate_benchmark          # must pass before trusting results
+python -m scripts.run_all --split test        # the ladder, B0..B3
+python -m scripts.run_all --llm anthropic     # same, against a real model
 ```
 
 ### Layout
 
 ```
 src/            schema, frozen simulator, compliance gate, oracle, generator
-src/policies/   B0-B3. May read Observation only; enforced by tests, not by convention.
+src/policies/   B0-B3, LLM clients. May read Observation only; enforced by tests.
 config/         compliance.yaml, economics.yaml -- every constant in one readable place
 scripts/        validate_benchmark and (later) run_all
 tests/          test_no_leakage.py: AST-level guard against ground-truth access

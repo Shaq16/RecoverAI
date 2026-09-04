@@ -13,6 +13,25 @@
     "customer_messaging.max_messages_per_episode",
     "disputes.block_debit_when_active_dispute"
   ],
+  "llm_backend": "mock",
+  "b3_economics": {
+    "routed_records": 262,
+    "invocation_rate": 0.4645390070921986,
+    "decision_nodes_routed": 709,
+    "expected_invocations": 492.86947141158646,
+    "accepted_by_gates": 417,
+    "acceptance_rate": 0.5881523272214386,
+    "unique_client_calls": 709,
+    "llm_unit_cost": 0.35,
+    "llm_cost": 172.50431499405525,
+    "value_vs_b2": -1894.2178587238159,
+    "net_benefit_vs_b2": -2066.722173717871,
+    "regret_b2": 2273.0943696642207,
+    "regret_b3": 4167.312228388037,
+    "regret_captured": -1894.2178587238159,
+    "regret_captured_share": -0.8333212575787726,
+    "breakeven_capture_needed": 0.07588964070133938
+  },
   "policies": [
     {
       "policy": "B0 do-nothing",
@@ -245,6 +264,84 @@
           "denied_per_record": 0.0,
           "waste_inr": 0,
           "regret_inr": 270.81
+        }
+      }
+    },
+    {
+      "policy": "B3 router",
+      "n": 564,
+      "policy_value": 119416.4,
+      "oracle_value": 123583.71,
+      "share_of_oracle": 0.9663,
+      "ci95": [
+        0.9465,
+        0.9796
+      ],
+      "root_agreement": 0.7358,
+      "abandon_rate": 0.1099,
+      "denied_per_record": 0.0,
+      "waste_inr": 136.22,
+      "regret_inr": 4167.31,
+      "per_slice": {
+        "ordinary": {
+          "slice": "ordinary",
+          "n": 316,
+          "policy_value": 73096.65,
+          "oracle_value": 76228.66,
+          "share_of_oracle": 0.9589,
+          "root_agreement": 0.7722,
+          "abandon_rate": 0.038,
+          "denied_per_record": 0.0,
+          "waste_inr": 17.62,
+          "regret_inr": 3132.01
+        },
+        "looks_alive_is_dead": {
+          "slice": "looks_alive_is_dead",
+          "n": 61,
+          "policy_value": 4047.3,
+          "oracle_value": 4643.72,
+          "share_of_oracle": 0.8716,
+          "root_agreement": 0.4426,
+          "abandon_rate": 0.0164,
+          "denied_per_record": 0.0,
+          "waste_inr": 99.8,
+          "regret_inr": 596.42
+        },
+        "compliance_trap": {
+          "slice": "compliance_trap",
+          "n": 56,
+          "policy_value": 30134.19,
+          "oracle_value": 30235.48,
+          "share_of_oracle": 0.9966,
+          "root_agreement": 0.8571,
+          "abandon_rate": 0.0536,
+          "denied_per_record": 0.0,
+          "waste_inr": 5.47,
+          "regret_inr": 101.29
+        },
+        "cost_trap": {
+          "slice": "cost_trap",
+          "n": 62,
+          "policy_value": 9.59,
+          "oracle_value": 34.17,
+          "share_of_oracle": 0.2807,
+          "root_agreement": 0.8226,
+          "abandon_rate": 0.6935,
+          "denied_per_record": 0.0,
+          "waste_inr": 13.32,
+          "regret_inr": 24.58
+        },
+        "ambiguous_dnh": {
+          "slice": "ambiguous_dnh",
+          "n": 69,
+          "policy_value": 12128.67,
+          "oracle_value": 12441.68,
+          "share_of_oracle": 0.9748,
+          "root_agreement": 0.6522,
+          "abandon_rate": 0.0435,
+          "denied_per_record": 0.0,
+          "waste_inr": 0,
+          "regret_inr": 313.01
         }
       }
     }
