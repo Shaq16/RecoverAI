@@ -1,82 +1,234 @@
-# Compliance constraints for recurring-payment recovery in India.
+# Constraints on recurring-payment recovery in India.
 #
 # ============================ READ THIS ============================
-# Every value below is marked verified: true|false.
+# Every constant below carries a `nature:` field. It is the most important
+# field in this file, because it is the one an outside reader will assume
+# rather than check:
 #
-# The `false` ones are PLACEHOLDERS chosen to be structurally realistic.
-# They must be checked against the primary sources listed under `source`
-# before this project is submitted or shown to anyone. Do not copy numbers
-# from a language model (including the one that scaffolded this file) into
-# the `verified: true` state.
+#   regulatory           - a figure or rule stated in a primary regulatory
+#                          instrument, quoted in `source_quote`.
+#   conservative_policy  - OUR product decision. Prudent merchant behaviour.
+#                          No regulator requires it. It is enforced here as a
+#                          hard gate because a recovery system should be
+#                          cautious, not because it would otherwise be illegal.
+#   definitional         - a logical impossibility, not a rule. A revoked
+#                          mandate cannot be debited.
 #
-# The point of this file is that compliance is enforced in code as a
-# deterministic gate, not left to a prompt. The gate is real either way;
-# only the constants need confirming.
+# `verified: true` means "this constant has been checked against the cited
+# primary source, and the `nature` field reflects what that source actually
+# says." It does NOT mean "a regulator requires this value". Seven of the
+# constants here were checked and found to be our own policy; saying so is the
+# point of the audit, not a failure of it.
+#
+# Audited 2026-09-04 against primary sources: every URL below was fetched, and
+# every quote re-fetched independently before being recorded. Where a source
+# does not establish what this project previously implied, that is stated
+# explicitly rather than softened.
+#
+# Note on framework currency: RBI consolidated this area into the Digital
+# Payments - E-mandate Framework, 2026 (RBI/DPSS/2026-27/396, 21 Apr 2026),
+# repealing the underlying 2019-2023 circulars. Sources point there.
 # ===================================================================
 
 retry_limits:
   max_attempts_per_cycle:
     value: 4
-    verified: false
-    source: "https://www.rbi.org.in/  (search: e-mandate recurring transactions, processing of e-mandate)"
-    note: "Network/scheme rules (NPCI UPI Autopay, card networks) may bind tighter than RBI."
+    nature: conservative_policy
+    verified: true
+    # consulted; does not establish this policy value
+    source: "https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=13374"
+    note: >-
+      NOT a regulatory cap. No RBI, NPCI or TRAI instrument establishes a
+      maximum number of retry attempts for a failed recurring e-mandate debit.
+      Card-scheme rules on retrying declined recurring transactions do exist
+      (see Visa Rules at disputes.block_debit_when_active_dispute.source) but
+      they are scheme rules rather than
+      Indian regulation, and they do not specify this figure. 4 is this
+      project's declared episode limit.
 
   min_hours_between_attempts:
     value: 6
-    verified: false
-    source: "Acquirer / scheme retry rules; confirm with Razorpay public docs."
+    nature: conservative_policy
+    verified: true
+    # consulted; does not establish this policy value
+    source: "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=11668&Mode=0"
+    note: >-
+      NOT a regulatory interval. The originating 2019 e-mandate circular was
+      fetched and contains no minimum spacing between debit attempts. 6 hours
+      is our own throttle.
 
   max_days_from_first_failure:
     value: 14
-    verified: false
-    source: "Billing-cycle convention; confirm."
+    nature: conservative_policy
+    verified: true
+    # consulted; does not establish this policy value
+    source: "https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=13374"
+    note: >-
+      NOT a regulatory window. A billing-cycle convention and this benchmark's
+      episode horizon. Kept because it bounds the simulator's search, not
+      because a regulator imposes it.
 
 pre_debit_notification:
   # Whether a debit attempt is permitted when no pre-debit notice was sent.
   required_before_debit:
     value: true
-    verified: false
-    source: "https://www.rbi.org.in/  (e-mandate framework, pre-transaction notification)"
+    nature: conservative_policy
+    verified: true
+    # consulted; establishes the ISSUER's notice duty, not this merchant-side
+    # block -- it does not establish this policy value
+    source: "https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=13374"
+    source_quote: >-
+      An issuer shall send a pre-transaction notification to the customer, at
+      least 24 hours prior to the actual charge / debit.
+    note: >-
+      The blocking BEHAVIOUR is our policy; the underlying notice duty is
+      regulatory but is not ours to discharge. Framework 2026 cl. 6(a) places
+      the obligation on the ISSUER ("An issuer shall send..."), and the
+      Framework binds Payment System Providers and Participants, reaching
+      merchants only indirectly via acquirer oversight. No located clause
+      attaches a debit-blocking consequence to a missing notice: cl. 6 imposes
+      a notification duty plus an opt-out facility and says nothing about the
+      validity of the debit itself. RecoverAI is merchant-side and is not the
+      issuer, so refusing to attempt a debit when the notice flag is false is
+      prudence, not compliance. Behaviour deliberately unchanged.
+
   min_hours_before_debit:
     value: 24
-    verified: false
-    source: "https://www.rbi.org.in/"
+    nature: regulatory
+    verified: true
+    enforced: false
+    source: "https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=13374"
+    source_quote: >-
+      An issuer shall send a pre-transaction notification to the customer, at
+      least 24 hours prior to the actual charge / debit.
+    note: >-
+      The figure is correct and stable: Framework 2026 cl. 6(a) states it in
+      hours, as a floor ("at least"), and the wording has been unchanged since
+      the 21 Aug 2019 circular apart from that circular's card-only phrasing
+      ("cardholder... debit to the card"). BUT `enforced: false` is the
+      operative fact here. This constant gates NOTHING at runtime.
+      src/compliance.py never reads it, and it cannot: Observation carries
+      pre_debit_notice_sent as a bare bool with no send timestamp, so no
+      elapsed-hours comparison is expressible. Enforcing it would require a new
+      Observation field, and the schema is frozen. Recorded as a declared
+      regulatory figure that this benchmark structurally cannot model -- not as
+      a rule the gate applies. A 24-hour interval is NOT checked anywhere.
+      Note also that the 24h clock runs against the issuer's notification, so
+      even a full implementation would model the issuer's duty, not ours.
+
   # Above this ticket size an additional factor of authentication is required,
   # which a silent retry cannot satisfy.
   afa_threshold_inr:
     value: 15000
-    verified: false
-    source: "https://www.rbi.org.in/  (AFA limit for recurring e-mandates; revised more than once)"
+    nature: regulatory
+    verified: true
+    source: "https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=13374"
+    source_quote: >-
+      All recurring transactions may be authorised without AFA up to ₹15,000/-
+      per transaction. Transactions above this amount shall be subject to AFA.
+      Payment of insurance premiums, subscription to mutual funds, and credit
+      card bill payments may be made without AFA up to ₹1,00,000/- per
+      transaction.
+    note: >-
+      15000 is the current GENERAL limit and is the applicable one here.
+      History, all traced to primary circulars: Rs 2,000 (RBI/2019-20/47,
+      21 Aug 2019) -> Rs 5,000 (RBI/2020-21/74, 4 Dec 2020) -> Rs 15,000
+      (RBI/2022-23/73, 16 Jun 2022) -> a Rs 1,00,000 carve-out (RBI/2023-24/88,
+      12 Dec 2023), now consolidated at Framework 2026 cl. 8(a)-8(b). Two
+      caveats. (1) The Rs 1,00,000 carve-out applies ONLY to insurance
+      premiums, mutual-fund subscriptions and credit-card bill payments; it
+      does not reach subscription billing, so it is deliberately not modelled
+      and no second threshold is declared. (2) The strict `>` comparison is
+      right -- AFA-free "up to Rs 15,000" means exactly 15000 is exempt -- but
+      the code's ABSOLUTE DENIAL of the debit is our inference, not a quoted
+      rule. cl. 8(a) says such transactions "shall be subject to AFA", not that
+      they are prohibited. Denying a silent retry above the threshold is a
+      defensible proxy for "an unattended retry cannot furnish AFA"; the
+      regulator's own remedy is a step-up to an authenticated flow, which this
+      benchmark's action space does not contain. Behaviour unchanged.
 
 customer_messaging:
   # Commercial communication time window (local time).
   allowed_hours:
     start: 9
     end: 21
-    verified: false
-    source: "https://www.trai.gov.in/  (TCCCPR / DLT commercial communication rules)"
+    nature: conservative_policy
+    verified: true
+    # consulted; does not establish this policy value
+    source: "https://trai.gov.in/sites/default/files/2025-01/RegulationUcc19072018.pdf"
+    source_quote: >-
+      "Unsolicited commercial communication or UCC" means any commercial
+      communication that is neither as per the consent nor as per registered
+      preference(s) of recipient, but shall not include: Any transactional
+      message or transactional voice call; Any service message [...]
+      "Preference of Time band and Day type for Commercial Communication" means
+      preference exercised by the customer to permit unsolicited commercial
+      communications only during time slots [...]
+    note: >-
+      NOT a TRAI requirement for this message class, and the number matches no
+      regulatory band. TCCCPR 2018 contains no blanket operative hour
+      restriction on commercial communication. Its only time-band machinery is
+      a customer-PREFERENCE construct, defined to cover UNSOLICITED commercial
+      communication, and cl. (bw) excludes transactional and service messages
+      from UCC entirely. A notice that a subscription debit failed, asking the
+      customer to update their payment method, is a Service Message; it is
+      therefore outside the time-band preference altogether. Separately, 9 is
+      not even the promotional default: the nine bands in Schedule-II with
+      defaults off leave 10:00-21:00. The string "0900 to 2100" occurs exactly
+      once in the whole gazette, in a historical annexure row describing an
+      amendment to the TCCCPR 2010 regulations, which regulation 38 repealed.
+      Currency checked: the 12 Feb 2025 Second Amendment is the latest notified
+      amendment, and the un-notified Draft Third Amendment 2026 reproduces the
+      same bands and adds no hour restriction. Kept AS POLICY and behaviour
+      deliberately unchanged -- sending a dunning message at 3am is bad
+      practice regardless of legality. The gate is applied symmetrically to the
+      oracle and every policy (src/oracle.py, src/evaluate.py), so it biases no
+      published number; it is a product constraint, not a compliance trap.
+
   max_messages_per_episode:
     value: 2
-    verified: false
-    source: "https://www.trai.gov.in/"
+    nature: conservative_policy
+    verified: true
+    # consulted; does not establish this policy value
+    source: "https://trai.gov.in/sites/default/files/2025-01/RegulationUcc19072018.pdf"
+    note: >-
+      NOT a regulatory cap. TCCCPR imposes no limit on the number of service or
+      transactional messages a business sends its own customer. The only cap in
+      the regulation is a per-telephone-number Usage Cap aimed at senders of
+      commercial traffic, which is a different object. 2 is a product decision
+      about how often it is decent to chase someone.
 
 mandate_state:
   # These are logical, not regulatory: a revoked mandate cannot be debited.
   block_debit_when_revoked:
     value: true
+    nature: definitional
     verified: true
     source: "Definitional."
   block_debit_when_expired:
     value: true
+    nature: definitional
     verified: true
     source: "Definitional."
   block_debit_above_mandate_cap:
     value: true
+    nature: definitional
     verified: true
     source: "Definitional."
 
 disputes:
   block_debit_when_active_dispute:
     value: true
-    verified: false
-    source: "Scheme chargeback rules; confirm."
+    nature: conservative_policy
+    verified: true
+    source: "https://usa.visa.com/dam/VCOM/download/about-visa/visa-rules-public.pdf"
+    source_quote: >-
+      A Merchant must not submit a Transaction to the Acquirer that was
+      previously disputed and [...]
+    note: >-
+      Scheme rule adjacent to our gate, but not the same rule, and not Indian
+      regulation. Visa Rules prohibit re-submitting a transaction that was
+      PREVIOUSLY DISPUTED. Our gate is broader: it blocks a NEW debit while any
+      dispute is open on the customer. That is prudent -- continuing to bill
+      into an open dispute invites further chargebacks -- but no RBI or NPCI
+      instrument was found requiring it. Behaviour unchanged.

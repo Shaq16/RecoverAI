@@ -45,7 +45,12 @@ from ..schema import (
     ABANDON, RETRY, RETRY_LATER, REQUEST_PAYMENT_UPDATE,
     MAX_ATTEMPTS, MAX_HORIZON_HOURS,
 )
-from .b2_rules import B2Rules
+from .b2_rules import (
+    B2Rules,
+    belief as b2_belief,
+    _p_retry as b2_p_retry,
+    _p_update as b2_p_update,
+)
 from .llm_client import LLMClient, MockLLMClient, LLMDecision, observable_payload
 
 # Pre-registered. See the module docstring.
@@ -195,16 +200,50 @@ class B3Router:
         # Scored under B2's belief model, which is the only estimate available
         # that does not consult ground truth. An action the merchant's own
         # economics say loses money does not execute on a model's say-so.
-        ev = next((e for e, a, d in scored if a == action and d == delay), None)
-        if ev is None:
-            gates["economic"] = "rejected: action/delay outside evaluated set"
-            return False, gates
+        ev, exact = self._economic_value(obs, action, delay, scored)
+        basis = "" if exact else ", single-step lower bound (delay off B2 grid)"
         if ev <= 0.0:
-            gates["economic"] = f"rejected: EV {ev:.2f} <= 0"
+            gates["economic"] = f"rejected: EV {ev:.2f} <= 0{basis}"
             return False, gates
-        gates["economic"] = f"ok (EV {ev:.2f})"
+        gates["economic"] = f"ok (EV {ev:.2f}{basis})"
 
         return True, gates
+
+    def _economic_value(self, obs: Observation, action: str, delay: int,
+                        scored: List[Tuple[float, str, int]]) -> Tuple[float, bool]:
+        """
+        EV of (action, delay) in INR under B2's belief model.
+
+        B2 ranks only DELAY_GRID_HOURS, so a proposal at any other delay is
+        simply absent from `scored`. Treating that absence as an economic
+        rejection conflated "I cannot evaluate this" with "this loses money",
+        and meant an off-grid proposal could never be assessed on its economics
+        at all -- it was refused for a reason that was not economic.
+
+        On a miss the proposal is evaluated directly, reusing B2's own belief
+        functions so there remains exactly one economic model in the system.
+        That estimate is single-step: it omits the continuation value B2's
+        search adds for the branch where this action fails. Continuation value
+        is non-negative -- B2's recursion floors at the ABANDON value of zero --
+        so this is a LOWER BOUND on B2's full EV. Clearing the gate on the
+        lower bound therefore implies clearing it under the full model, and the
+        gate is strictly no weaker: it can only ever under-accept.
+
+        Returns (ev, exact), where `exact` is True when the value came from
+        B2's full search and False when it is the lower bound.
+        """
+        hit = next((e for e, a, d in scored if a == action and d == delay), None)
+        if hit is not None:
+            return hit, True
+
+        bel = b2_belief(obs)
+        if action == REQUEST_PAYMENT_UPDATE:
+            p = b2_p_update(obs, bel, delay)
+        else:
+            p = b2_p_retry(obs, bel, delay)
+        reward = obs.amount * self.margin_rate
+        ev = p * reward - oracle.action_cost(action, self.econ)
+        return ev, False
 
     # ---------------- policy interface ----------------
 

@@ -32,17 +32,28 @@ the thing that could prove the agent *worthless*:
    which ignore every input feature. If a constant policy scores well, the
    benchmark is broken.
 
-Current result of (3) on 1,200 records:
+Current result of (3) on 1,200 records, under exact evaluation:
 
 | constant policy | % of oracle value captured |
 |---|---|
 | always ABANDON | 0.0% |
-| always UPDATE now | 33.1% |
-| always RETRY @48h | 39.3% |
-| UPDATE then RETRY @48h | 40.0% |
+| always RETRY now | 7.9% |
+| always UPDATE now | 32.3% |
+| always RETRY @120h | 36.0% |
+| UPDATE then RETRY @48h | 36.9% |
+| **always RETRY @48h** | **39.8%** |
 
-The best mindless policy captures 40%. The remaining 60% is what a real policy
-has to earn.
+The best mindless policy captures 39.8%. The remaining 60% is what a real
+policy has to earn.
+
+> **Correction.** An earlier version of this table reported 40.0% and named
+> "UPDATE then RETRY @48h" the strongest mindless policy. Both were wrong.
+> `validate_benchmark.py` sampled outcomes -- three trials off a single shared
+> RNG -- and re-seeding alone moved the headline between 31.1% and 40.0%; the
+> published 40.0% was the luckiest cell in that range. That policy's true
+> figure is 36.9%, overstated by 3.1 points, and it actually ranks third. The
+> script now uses the same exact evaluator as the main benchmark, so these
+> numbers are reproducible rather than sampled.
 
 ## The policy ladder
 
@@ -96,7 +107,7 @@ codes are deliberately lossy — several true causes collapse into
 | slice | what it tests |
 |---|---|
 | `looks_alive_is_dead` | Long-tenured customer, spotless history, but the mandate was silently revoked and the merchant's cached state is stale. Punishes over-weighting customer quality. |
-| `compliance_trap` | The commercially obvious action is prohibited (missing pre-debit notice, retry cap reached, above AFA threshold, outside messaging hours, active dispute). Correct behaviour is *not* recovering the money. |
+| `compliance_trap` | The commercially obvious action is blocked by the gate (missing pre-debit notice, retry cap reached, above AFA threshold, outside the messaging window, active dispute). Correct behaviour is *not* recovering the money. Note that only the AFA threshold is a regulatory figure; the rest are this project's own conservative policy, and the messaging window in particular is **not** a TRAI requirement for this message class -- see [Compliance](#compliance). The slice tests whether a policy respects the gate it is given, not whether the gate is legally mandated. |
 | `cost_trap` | Low-value plan needing an expensive repair from a disengaged customer. Correct action is usually to stop. |
 | `ambiguous_dnh` | `DO_NOT_HONOUR` with the true cause split across funds, risk and issuer downtime. No policy can be right every time; tests calibrated uncertainty. |
 | `ordinary` | The other 55%. |
@@ -114,22 +125,22 @@ reproduce byte-for-byte. Full output in `results/ladder.md`.
 | B0 do-nothing | 0.0% | [0.0, 0.0] | 15% | 123,584 | 0 |
 | B1 naive retry | 33.4% | [26.2, 41.0] | 35% | 82,368 | 160 |
 | B2 rules | **98.2%** | [97.5, 98.7] | 72% | 2,273 | 136 |
-| B3 router | 96.6% | [94.6, 98.0] | 74% | 4,167 | 136 |
+| B3 router | 96.6% | [94.6, 97.9] | 74% | 4,242 | 136 |
 | B* oracle | 100% | -- | 100% | 0 | -- |
 
 ### B3 does not beat B2, and that is the result
 
-Routing the ambiguous tail to an LLM **lost INR 2,067 net** against B2. We are
+Routing the ambiguous tail to an LLM **lost INR 2,142 net** against B2. We are
 reporting it rather than tuning until it inverts.
 
 The loss decomposes cleanly, and not in the direction you would guess:
 
 | what the LLM changed | n | value delta | oracle agreement B2 -> B3 |
 |---|---|---|---|
-| same action class, different timing | 72 | **-1,477** | 64% -> 64% |
-| different action class | 60 | -373 | **37% -> 55%** |
+| same action class, different timing | 76 | **-1,525** | 66% -> 66% |
+| different action class | 62 | -399 | **37% -> 55%** |
 | identical to B2 | 27 | -46 | 85% -> 85% |
-| rejected by the gates, fell back to B2 | 83 | 0 | 49% -> 49% |
+| rejected by the gates, fell back to B2 | 77 | 0 | 47% -> 47% |
 
 When the model changed *which lever to pull* it was right substantially more
 often -- oracle agreement on those records rose 18 points -- and still lost
@@ -143,12 +154,12 @@ traffic is routed:
 
 | relative-margin threshold | routed | B3 % of oracle | net vs B2 (INR) |
 |---|---|---|---|
-| 0.02 | 33.3% | 97.3% | -1,159 |
-| 0.05 | 42.4% | 97.2% | -1,264 |
-| 0.10 | 44.5% | 96.7% | -2,007 |
-| **0.15 (pre-registered)** | 46.5% | 96.6% | **-2,067** |
-| 0.30 | 51.6% | 96.2% | -2,569 |
-| 0.60 | 55.5% | 96.2% | -2,697 |
+| 0.02 | 33.3% | 97.2% | -1,219 |
+| 0.05 | 42.4% | 97.2% | -1,310 |
+| 0.10 | 44.5% | 96.6% | -2,082 |
+| **0.15 (pre-registered)** | 46.5% | 96.6% | **-2,142** |
+| 0.30 | 51.6% | 96.2% | -2,644 |
+| 0.60 | 55.5% | 96.1% | -2,772 |
 
 Two caveats stated plainly. These runs use `MockLLMClient`, a deterministic
 offline stand-in; the real-model number is not yet measured, and
@@ -169,16 +180,70 @@ world model the correct configuration routes nothing.
 
 ## Compliance
 
-`config/compliance.yaml` holds every constraint as a deterministic constant with
-a `verified:` flag and a source URL.
+`config/compliance.yaml` holds every constraint as a deterministic constant
+carrying a `nature:` field, a primary source URL, and where applicable a
+verbatim `source_quote:`.
 
-> **Constants marked `verified: false` are structurally realistic placeholders
-> and must be checked against RBI / TRAI / NPCI primary sources before this is
-> shown to anyone.** They were not sourced from a language model's recall, and
-> should not be promoted to `verified: true` on that basis.
+All twelve constants were audited on 2026-09-04 against primary sources. Every
+URL was fetched and every quote re-fetched independently before being recorded.
+The result is not the one this section previously implied:
 
-`compliance.unverified_constants()` prints everything still outstanding on every
-data generation run, so the gap is impossible to forget.
+| `nature:` | count | meaning |
+|---|---|---|
+| `regulatory` | 2 | a figure stated in a primary instrument, quoted in the file |
+| `conservative_policy` | 7 | **our** product decision; no regulator requires it |
+| `definitional` | 3 | a logical impossibility, not a rule |
+
+**Seven of the nine constants previously marked `verified: false` turned out to
+be our own policy rather than regulation.** They are enforced as hard gates
+because a recovery system should be cautious, not because acting otherwise
+would be illegal. Saying so is the outcome of the audit, not a failure of it.
+`nature:` is the most important field in the file precisely because it is the
+one a reader would otherwise assume.
+
+The two genuine regulatory figures, both from the RBI **Digital Payments --
+E-mandate Framework, 2026** (RBI/DPSS/2026-27/396, 21 Apr 2026), which
+consolidated and repealed the underlying 2019--2023 circulars:
+
+- `afa_threshold_inr: 15000` — cl. 8(a), verbatim: recurring transactions may
+  be authorised without AFA up to ₹15,000. The strict `>` comparison is
+  correct, since exactly ₹15,000 is exempt. Two caveats are recorded in the
+  file: the ₹1,00,000 carve-out (cl. 8(b)) reaches only insurance premiums,
+  mutual-fund subscriptions and credit-card bill payments, so it does not apply
+  to subscription billing and is deliberately not modelled; and the code's
+  *absolute denial* of the debit is our inference, since the regulator says
+  such transactions "shall be subject to AFA" rather than prohibiting them.
+- `min_hours_before_debit: 24` — cl. 6(a), verbatim, unchanged since 2019. It
+  carries `enforced: false`, and that is the operative fact: **the 24-hour
+  interval is not checked anywhere at runtime.** `src/compliance.py` never
+  reads the key, and cannot — `Observation.pre_debit_notice_sent` is a bare
+  bool with no send timestamp, so no elapsed-hours comparison is expressible,
+  and the schema is frozen. It is recorded as a declared regulatory figure this
+  benchmark structurally cannot model, not as a rule the gate applies.
+
+Two clarifications worth stating plainly, because both cut against the
+project's own earlier framing:
+
+- The **9am–9pm messaging window is not a TRAI requirement** for the messages
+  this system sends. TCCCPR 2018 has no blanket operative hour restriction; its
+  time-band machinery is a customer *preference* over *unsolicited* commercial
+  communication, and cl. (bw) excludes transactional and service messages from
+  that definition entirely. A failed-debit notice asking for a payment-method
+  update is a service message. Nor does `9` match any regulatory band — the
+  promotional default with bands off is 10:00–21:00, and the string "0900 to
+  2100" appears once in the whole gazette, in a historical annexure describing
+  an amendment to the TCCCPR **2010** regulations, repealed by regulation 38.
+  The gate is kept, unchanged, as product policy: messaging someone at 3am is
+  bad practice regardless of legality. It is applied symmetrically to the
+  oracle and to every policy, so it biases no reported number.
+- The **pre-debit notice duty is real but is not ours.** Framework 2026 cl. 6(a)
+  binds the *issuer* ("An issuer shall send…"). No located clause attaches a
+  debit-blocking consequence to a missing notice. Refusing the debit is
+  merchant-side prudence.
+
+`compliance.unverified_constants()` still prints anything left outstanding on
+every data-generation run. That list is now empty, because the audit is done —
+not because the check was removed.
 
 ## Status
 
@@ -192,7 +257,7 @@ data generation run, so the gap is impossible to forget.
 - [x] B0 / B1 / B2
 - [x] B3 + audit trail
 - [ ] Charts, video
-- [ ] Verify the compliance constants marked `verified: false`
+- [x] Audit the compliance constants against primary sources
 
 ## Running
 
@@ -229,3 +294,15 @@ results/        metrics, charts, SIMULATOR_CHANGELOG.md
 - Synthetic data cannot establish that these interventions work on real
   customers. It can establish that a policy reasons correctly given a stated
   world model, which is a narrower and honest claim.
+- `churn_penalty_multiplier` in `config/economics.yaml` is **inert**. Nothing
+  reads it. Its comment says "set to 0 to disable", which implies a non-zero
+  value would enable a churn penalty on abandoning a recoverable payment; it
+  would not — the value is silently ignored. At its current `0.0` the reported
+  economics are correct by coincidence rather than by enforcement, and every
+  number here is pure single-invoice economics with no downstream-value term.
+  It is left in place, documented rather than deleted, because it records a
+  real modelling intention: abandoning a recoverable payment does cost more
+  than one invoice. Implementing it would change the frozen economics and
+  invalidate every published figure, so it is deliberately not implemented.
+- `min_hours_before_debit` is likewise declared but unenforced; see
+  [Compliance](#compliance).

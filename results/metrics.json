@@ -2,35 +2,25 @@
   "split": "test",
   "n": 564,
   "seed": 7,
-  "unverified_constants": [
-    "retry_limits.max_attempts_per_cycle",
-    "retry_limits.min_hours_between_attempts",
-    "retry_limits.max_days_from_first_failure",
-    "pre_debit_notification.required_before_debit",
-    "pre_debit_notification.min_hours_before_debit",
-    "pre_debit_notification.afa_threshold_inr",
-    "customer_messaging.allowed_hours",
-    "customer_messaging.max_messages_per_episode",
-    "disputes.block_debit_when_active_dispute"
-  ],
+  "unverified_constants": [],
   "llm_backend": "mock",
   "b3_economics": {
     "routed_records": 262,
     "invocation_rate": 0.4645390070921986,
-    "decision_nodes_routed": 709,
-    "expected_invocations": 492.86947141158646,
-    "accepted_by_gates": 417,
-    "acceptance_rate": 0.5881523272214386,
-    "unique_client_calls": 709,
+    "decision_nodes_routed": 707,
+    "expected_invocations": 493.5518640290335,
+    "accepted_by_gates": 431,
+    "acceptance_rate": 0.6096181046676096,
+    "unique_client_calls": 707,
     "llm_unit_cost": 0.35,
-    "llm_cost": 172.50431499405525,
-    "value_vs_b2": -1894.2178587238159,
-    "net_benefit_vs_b2": -2066.722173717871,
+    "llm_cost": 172.7431524101617,
+    "value_vs_b2": -1968.905495118277,
+    "net_benefit_vs_b2": -2141.6486475284387,
     "regret_b2": 2273.0943696642207,
-    "regret_b3": 4167.312228388037,
-    "regret_captured": -1894.2178587238159,
-    "regret_captured_share": -0.8333212575787726,
-    "breakeven_capture_needed": 0.07588964070133938
+    "regret_b3": 4241.999864782498,
+    "regret_captured": -1968.905495118277,
+    "regret_captured_share": -0.8661785104017137,
+    "breakeven_capture_needed": 0.07599471219300022
   },
   "policies": [
     {
@@ -270,30 +260,30 @@
     {
       "policy": "B3 router",
       "n": 564,
-      "policy_value": 119416.4,
+      "policy_value": 119341.72,
       "oracle_value": 123583.71,
-      "share_of_oracle": 0.9663,
+      "share_of_oracle": 0.9657,
       "ci95": [
-        0.9465,
-        0.9796
+        0.9456,
+        0.979
       ],
       "root_agreement": 0.7358,
       "abandon_rate": 0.1099,
       "denied_per_record": 0.0,
       "waste_inr": 136.22,
-      "regret_inr": 4167.31,
+      "regret_inr": 4242.0,
       "per_slice": {
         "ordinary": {
           "slice": "ordinary",
           "n": 316,
-          "policy_value": 73096.65,
+          "policy_value": 73021.96,
           "oracle_value": 76228.66,
-          "share_of_oracle": 0.9589,
+          "share_of_oracle": 0.9579,
           "root_agreement": 0.7722,
           "abandon_rate": 0.038,
           "denied_per_record": 0.0,
           "waste_inr": 17.62,
-          "regret_inr": 3132.01
+          "regret_inr": 3206.7
         },
         "looks_alive_is_dead": {
           "slice": "looks_alive_is_dead",

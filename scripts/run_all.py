@@ -83,6 +83,52 @@ def llm_accounting(b3: evaluate.PolicyMetrics, router: B3Router,
     }
 
 
+def write_b3_audit(path: str, b3: evaluate.PolicyMetrics, router: B3Router) -> int:
+    """
+    Persist one JSON object per B3 decision node.
+
+    Without this the audit trail exists only in memory and dies with the
+    process: results/metrics.json carries aggregates alone, so "audit every B3
+    decision" is unmet in any inspectable sense.
+
+    Each line joins two records that are already computed, adding nothing new:
+    the router's B3Decision (B2 proposal, ambiguity margin and stake, whether
+    the LLM was invoked, its proposal and confidence, every gate verdict,
+    acceptance, final action) and the evaluator's AuditStep for the same node
+    (p_success, and the action the evaluator ACTUALLY executed).
+
+    `reach` is the probability of arriving at this node at all -- the product
+    of (1 - p_success) over strictly earlier steps in the episode. Note that
+    p_success and reach are probabilities from the frozen simulator, not
+    sampled outcomes: evaluation is exact and recurses both branches, so no
+    single realised outcome exists to record.
+
+    The join key is (payment_id, elapsed_hours), which is unique along an
+    episode because elapsed_hours strictly increases at every step.
+    """
+    written = 0
+    with open(path, "w") as f:
+        for r in b3.results:
+            reach = 1.0
+            for step in r.audit:
+                d = router.decisions.get((r.payment_id, step.elapsed_hours))
+                if d is not None:
+                    row = d.to_dict()
+                    row["slice_tag"] = r.slice_tag
+                    row["amount"] = r.amount
+                    row["step"] = step.step
+                    row["reach"] = round(reach, 8)
+                    row["p_success"] = round(step.p_success, 8)
+                    # What the evaluator actually ran, so the persisted trail
+                    # can be checked against execution rather than trusted.
+                    row["executed"] = {"action": step.chosen,
+                                       "delay_hours": step.chosen_delay}
+                    f.write(json.dumps(row) + "\n")
+                    written += 1
+                reach *= (1.0 - step.p_success)
+    return written
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=1200)
@@ -213,7 +259,11 @@ def main():
         f.write(f"| **net benefit vs B2** | **INR "
                 f"{acct['net_benefit_vs_b2']:,.0f}** |\n")
 
+    n_audit = write_b3_audit(os.path.join(RESULTS, "b3_audit.jsonl"),
+                             by_name["B3 router"], router)
+
     print(f"\nwrote {RESULTS}/metrics.json and {RESULTS}/ladder.md")
+    print(f"wrote {RESULTS}/b3_audit.jsonl: {n_audit} decision nodes")
     return 0
 
 
