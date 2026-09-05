@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="394" viewBox="0 0 800 394" role="img" aria-label="Did the AI earn its cost?">
+  <rect width="800" height="394" fill="#ffffff"/>
+  <text x="28" y="34" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="17" font-weight="600" fill="#292f32">Did the AI earn its cost?</text>
+  <text x="28" y="56" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#616d75">Selective routing vs strong deterministic rules. Frozen test split, n=564. LLM backend: mock.</text>
+  <line x1="280.4" y1="82" x2="280.4" y2="322" stroke="#dee1e3" stroke-width="1"/>
+  <text x="280.4" y="346" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">-2,000</text>
+  <line x1="345.7" y1="82" x2="345.7" y2="322" stroke="#dee1e3" stroke-width="1"/>
+  <text x="345.7" y="346" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">-1,000</text>
+  <line x1="411.0" y1="82" x2="411.0" y2="322" stroke="#c3c9cc" stroke-width="1.5"/>
+  <text x="411.0" y="346" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">0</text>
+  <line x1="476.2" y1="82" x2="476.2" y2="322" stroke="#dee1e3" stroke-width="1"/>
+  <text x="476.2" y="346" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">1,000</text>
+  <line x1="541.5" y1="82" x2="541.5" y2="322" stroke="#dee1e3" stroke-width="1"/>
+  <text x="541.5" y="346" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">2,000</text>
+  <line x1="606.8" y1="82" x2="606.8" y2="322" stroke="#dee1e3" stroke-width="1"/>
+  <text x="606.8" y="346" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">3,000</text>
+  <line x1="672.1" y1="82" x2="672.1" y2="322" stroke="#dee1e3" stroke-width="1"/>
+  <text x="672.1" y="346" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">4,000</text>
+  <text x="244" y="111.0" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#292f32" text-anchor="end">Value available above B2</text>
+  <text x="244" y="127.0" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="10.5" fill="#7b878e" text-anchor="end">B2 regret — the prize</text>
+  <path d="M410.97038778516867,92 H555.3373682353333 A4.0,4.0 0 0 1 559.3373682353333,96.0 V132.0 A4.0,4.0 0 0 1 555.3373682353333,136 H410.97038778516867 Z" fill="#305eff"/>
+  <text x="569.3" y="118.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" font-weight="600" fill="#292f32" text-anchor="start">₹2,273</text>
+  <text x="244" y="171.0" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#292f32" text-anchor="end">LLM cost to chase it</text>
+  <text x="244" y="187.0" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="10.5" fill="#7b878e" text-anchor="end">break-even needs 7.6%</text>
+  <path d="M410.97038778516867,152 H418.24549376342344 A4.0,4.0 0 0 1 422.24549376342344,156.0 V192.0 A4.0,4.0 0 0 1 418.24549376342344,196 H410.97038778516867 Z" fill="#7b878e"/>
+  <text x="432.2" y="178.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" font-weight="600" fill="#292f32" text-anchor="start">₹173</text>
+  <text x="244" y="231.0" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#292f32" text-anchor="end">B3 regret</text>
+  <text x="244" y="247.0" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="10.5" fill="#7b878e" text-anchor="end">worse than B2 by ₹1,969</text>
+  <path d="M410.97038778516867,212 H683.849658354457 A4.0,4.0 0 0 1 687.849658354457,216.0 V252.0 A4.0,4.0 0 0 1 683.849658354457,256 H410.97038778516867 Z" fill="#d01e11"/>
+  <text x="697.8" y="238.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" font-weight="600" fill="#292f32" text-anchor="start">₹4,242</text>
+  <text x="244" y="291.0" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#292f32" text-anchor="end">Net benefit vs B2</text>
+  <text x="244" y="307.0" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="10.5" fill="#7b878e" text-anchor="end">AI did not earn its cost</text>
+  <path d="M410.97038778516867,272 H275.18299168779026 A4.0,4.0 0 0 0 271.18299168779026,276.0 V312.0 A4.0,4.0 0 0 0 275.18299168779026,316 H410.97038778516867 Z" fill="#d01e11"/>
+  <text x="283.2" y="298.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" font-weight="600" fill="#ffffff" text-anchor="start">−₹2,142</text>
+  <text x="28" y="366" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12" fill="#616d75">Routing the ambiguous tail to an AI cost ₹173 and left ₹1,969 more on the table than the rules alone.</text>
+  <text x="28" y="383" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12" font-weight="600" fill="#d01e11">Net −₹2,142 versus B2. On this benchmark, more AI ≠ more revenue.</text>
+</svg>

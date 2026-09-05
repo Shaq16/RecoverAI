@@ -21,7 +21,12 @@ from src import compliance, evaluate, generate, oracle
 from src.policies.baselines import B0DoNothing, B1NaiveRetry
 from src.policies.b2_rules import B2Rules
 from src.policies.b3_router import B3Router
+from src.policies.gemini_client import DEFAULT_MODEL as GEMINI_MODEL
+from src.policies.gemini_client import GeminiLLMClient
 from src.policies.llm_client import AnthropicLLMClient, MockLLMClient
+from src.policies.openrouter_client import DEFAULT_MODEL as NEMOTRON_MODEL
+from src.policies.openrouter_client import OpenRouterNemotronClient
+from src.policies.prewarm import DEFAULT_CONCURRENCY, prewarm
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULTS = os.path.join(ROOT, "results")
@@ -70,8 +75,9 @@ def llm_accounting(b3: evaluate.PolicyMetrics, router: B3Router,
         "accepted_by_gates": accepted,
         "acceptance_rate": accepted / nodes if nodes else 0.0,
         "unique_client_calls": router.client.calls,
-        # AnthropicLLMClient increments .errors on every API error, refusal,
-        # or unparseable response. MockLLMClient has no such attribute.
+        # Both real backends (Anthropic, Gemini) increment .errors on every
+        # API error, refusal, or unparseable response. MockLLMClient has no
+        # such attribute, hence the getattr default.
         "llm_errors": getattr(router.client, "errors", 0),
         "llm_unit_cost": unit,
         "llm_cost": cost,
@@ -136,8 +142,8 @@ def real_model_failure(acct: dict, backend: str) -> str:
     """
     Return a failure message when a real-model run must not be trusted, or "".
 
-    Every exception path in AnthropicLLMClient -- API error, rate limit,
-    refusal, unparseable response -- returns a decision marked `malformed`,
+    Every exception path in a real backend -- API error, rate limit, refusal,
+    unparseable response -- returns a decision marked `malformed`,
     which the schema gate then rejects, which falls back to B2. That is correct
     behaviour for a single flaky call and catastrophic as a reporting default:
     a run whose key is wrong or which is rate-limited completes normally and
@@ -146,8 +152,9 @@ def real_model_failure(acct: dict, backend: str) -> str:
     not an error.
 
     So any error at all invalidates the run as a real-model benchmark. The
-    caller must refuse to write results and exit non-zero. The mock backend
-    cannot error and is never gated here.
+    caller must refuse to write results and exit non-zero. Only the mock
+    backend is exempt, because it cannot error; every other backend is gated
+    by name, so a new provider is covered automatically.
     """
     if backend == "mock":
         return ""
@@ -172,9 +179,15 @@ def main():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--split", default="test", choices=["test", "train", "all"])
     ap.add_argument("--bootstrap", type=int, default=2000)
-    ap.add_argument("--llm", default="mock", choices=["mock", "anthropic"],
+    ap.add_argument("--llm", default="mock",
+                    choices=["mock", "anthropic", "gemini", "nemotron"],
                     help="mock needs no API key and is deterministic")
-    ap.add_argument("--model", default="claude-opus-5")
+    ap.add_argument("--model", default=None,
+                    help="defaults to each backend's own default model")
+    ap.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
+                    help="parallel provider calls during cache prewarming; "
+                         "ignored for --llm mock. Evaluation itself stays "
+                         "sequential, so results do not depend on this.")
     args = ap.parse_args()
 
     econ, cfg = oracle.load_economics(), compliance.load_config()
@@ -186,11 +199,32 @@ def main():
           f"oracle achievable: INR {sum(r.hidden.oracle_ev for r in recs):,.0f}")
     print(f"simulator: {__import__('src.simulator', fromlist=['x']).SIMULATOR_VERSION}\n")
 
-    client = (AnthropicLLMClient(model=args.model) if args.llm == "anthropic"
-              else MockLLMClient())
+    if args.llm == "anthropic":
+        client = AnthropicLLMClient(model=args.model or "claude-opus-5")
+    elif args.llm == "gemini":
+        client = GeminiLLMClient(model=args.model or GEMINI_MODEL)
+    elif args.llm == "nemotron":
+        client = OpenRouterNemotronClient(model=args.model or NEMOTRON_MODEL)
+    else:
+        client = MockLLMClient()
     router = B3Router(econ, cfg, client=client)
     print(f"B3 LLM backend: {client.name}"
-          f"{' (' + args.model + ')' if args.llm == 'anthropic' else ''}\n")
+          f"{' (' + client.model + ')' if args.llm != 'mock' else ''}\n")
+
+    # Real backends: fill the decision cache concurrently first, so the
+    # sequential evaluation below is a pure cache hit. This changes latency
+    # only -- the numbers are produced by the same frozen evaluator either way.
+    if args.llm != "mock":
+        def _discover(probe_client):
+            probe_router = B3Router(econ, cfg, client=probe_client)
+            evaluate.evaluate(recs, probe_router, econ=econ, cfg=cfg,
+                              bootstrap=0, collect_audit=True)
+
+        pw = prewarm(client, _discover, concurrency=args.concurrency,
+                     log=print)
+        print(f"  prewarmed {pw['decisions_fetched']} decisions in "
+              f"{pw['passes']} pass(es); {pw['retries']} transient retries, "
+              f"{pw['errors']} hard errors\n")
 
     metrics = []
     for pol in build_ladder(econ, cfg, router):
@@ -224,6 +258,8 @@ def main():
           f"  ({100*acct['acceptance_rate']:.0f}%)")
     print(f"  unique client calls (cached)   {acct['unique_client_calls']}")
     print(f"  failed LLM calls               {acct['llm_errors']}")
+    print(f"  transient retries (not billed)  "
+          f"{getattr(router.client, 'retries', 0)}")
     print()
     print(f"  B2 regret                      INR {acct['regret_b2']:>10,.0f}")
     print(f"  B3 regret                      INR {acct['regret_b3']:>10,.0f}")

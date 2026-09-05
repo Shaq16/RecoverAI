@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" role="img" aria-label="Policy ladder — share of oracle-achievable value">
+  <rect width="760" height="380" fill="#ffffff"/>
+  <text x="28" y="34" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="17" font-weight="600" fill="#292f32">Policy ladder — share of oracle-achievable value</text>
+  <text x="28" y="56" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#616d75">Frozen test split, n=564, seed 7. Exact evaluation, no sampling.</text>
+  <line x1="168.0" y1="78" x2="168.0" y2="330" stroke="#c3c9cc" stroke-width="1"/>
+  <text x="168.0" y="350" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">0%</text>
+  <line x1="297.5" y1="78" x2="297.5" y2="330" stroke="#dee1e3" stroke-width="1"/>
+  <text x="297.5" y="350" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">25%</text>
+  <line x1="427.0" y1="78" x2="427.0" y2="330" stroke="#dee1e3" stroke-width="1"/>
+  <text x="427.0" y="350" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">50%</text>
+  <line x1="556.5" y1="78" x2="556.5" y2="330" stroke="#dee1e3" stroke-width="1"/>
+  <text x="556.5" y="350" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">75%</text>
+  <line x1="686.0" y1="78" x2="686.0" y2="330" stroke="#dee1e3" stroke-width="1"/>
+  <text x="686.0" y="350" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="11" fill="#7b878e" text-anchor="middle">100%</text>
+  <text x="154" y="109.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#292f32" text-anchor="end">B0  do nothing</text>
+  <text x="178.0" y="109.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" font-weight="600" fill="#292f32">0.0%</text>
+  <text x="154" y="159.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#292f32" text-anchor="end">B1  naive retry</text>
+  <path d="M168,136 H336.753 A4.0,4.0 0 0 1 340.753,140.0 V170.0 A4.0,4.0 0 0 1 336.753,174 H168 Z" fill="#305eff"/>
+  <text x="350.8" y="159.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" font-weight="600" fill="#292f32">33.4%</text>
+  <text x="154" y="209.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#292f32" text-anchor="end">B2  strong rules</text>
+  <path d="M168,186 H672.4688 A4.0,4.0 0 0 1 676.4688,190.0 V220.0 A4.0,4.0 0 0 1 672.4688,224 H168 Z" fill="#305eff"/>
+  <text x="686.5" y="209.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" font-weight="600" fill="#292f32">98.2%</text>
+  <text x="154" y="259.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#292f32" text-anchor="end">B3  selective AI</text>
+  <path d="M168,236 H664.2325999999999 A4.0,4.0 0 0 1 668.2325999999999,240.0 V270.0 A4.0,4.0 0 0 1 664.2325999999999,274 H168 Z" fill="#305eff"/>
+  <text x="678.2" y="259.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" font-weight="600" fill="#292f32">96.6%</text>
+  <text x="154" y="309.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#292f32" text-anchor="end">B★  oracle (ceiling)</text>
+  <path d="M168,286 H682.0 A4.0,4.0 0 0 1 686.0,290.0 V320.0 A4.0,4.0 0 0 1 682.0,324 H168 Z" fill="#7b878e"/>
+  <text x="696.0" y="309.5" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" font-weight="600" fill="#292f32">100.0%</text>
+  <text x="28" y="368" font-family="Inter,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12" fill="#616d75">Strong deterministic rules capture 98.2%. Selective AI captures 96.6% — 1.6 points lower, before counting what the AI cost.</text>
+</svg>

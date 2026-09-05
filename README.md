@@ -1,12 +1,45 @@
 # RecoverAI
 
-A rules-first, AI-assisted recovery system for failed recurring payments. When a
-subscription charge fails, RecoverAI decides whether to retry, retry later, ask
-the customer to fix their payment method, or stop — subject to compliance,
-retry limits and unit economics.
+**AI revenue recovery that knows when *not* to use AI.**
 
-**Thesis:** AI should not make every recovery decision. It should earn its cost
-only where deterministic rules run out of certainty.
+When a recurring subscription charge fails, RecoverAI decides whether to retry
+now, retry later, ask the customer to fix their payment method, or stop — under
+deterministic compliance, retry-budget and unit-economics gates. Deterministic
+rules handle every case they can settle. A model is consulted only on the
+genuinely ambiguous tail, and only when the money at stake exceeds the cost of
+asking. The model **recommends**; gates written in code **decide**.
+
+**Thesis:** AI should earn its cost only where deterministic rules run out of
+certainty.
+
+And the measured result, which is the opposite of the usual pitch:
+
+| | share of oracle-achievable value |
+|---|---|
+| B0 — do nothing | 0.0% |
+| B1 — naive retry | 33.4% |
+| **B2 — strong deterministic rules** | **98.2%** |
+| B3 — selective AI router | 96.6% |
+| B★ — oracle (ceiling) | 100% |
+
+Routing the ambiguous tail to a model cost **₹173** and produced a **net
+−₹2,142** against the rules alone. Strong rules already capture 98.2% of what
+is achievable, so there is very little left for a model to win and a real cost
+to trying.
+
+**More AI ≠ more revenue.** We are reporting that rather than tuning until it
+inverts. The system is built to *measure* whether AI earns its keep, and on this
+frozen benchmark it does not — see [Results](#results) and
+[AI economics](#did-the-ai-earn-its-cost).
+
+> **B3 figures throughout this repository come from `MockLLMClient`,** a
+> deterministic offline stand-in. **No real model has been benchmarked here.**
+> Gemini and Nemotron backends exist and have been smoke-tested against their
+> live APIs — they return valid decisions — but neither completed the full
+> 707-call run, so neither contributes a single published number. Every gate,
+> the router, the fallback path and the audit trail are fully exercised by the
+> mock; what is *not* measured is how a real model would score. We do not claim
+> it. See [Model backends](#model-backends-and-what-has-actually-been-run).
 
 Razorpay AI Buildathon — Track 03, AI Revenue Recovery.
 
@@ -120,6 +153,8 @@ intervals, because a 5-point difference on a 60-record slice is noise.
 Test split, n=564, seed 7. Exact evaluation -- no sampling, so these numbers
 reproduce byte-for-byte. Full output in `results/ladder.md`.
 
+![Policy ladder — share of oracle-achievable value](results/chart_policy_ladder.svg)
+
 | policy | % of oracle | 95% CI | oracle agreement | regret (INR) | waste (INR) |
 |---|---|---|---|---|---|
 | B0 do-nothing | 0.0% | [0.0, 0.0] | 15% | 123,584 | 0 |
@@ -132,6 +167,10 @@ reproduce byte-for-byte. Full output in `results/ladder.md`.
 
 Routing the ambiguous tail to an LLM **lost INR 2,142 net** against B2. We are
 reporting it rather than tuning until it inverts.
+
+<a name="did-the-ai-earn-its-cost"></a>
+
+![Did the AI earn its cost? Net -2,142 against deterministic rules](results/chart_ai_economics.svg)
 
 The loss decomposes cleanly, and not in the direction you would guess:
 
@@ -162,8 +201,8 @@ traffic is routed:
 | 0.60 | 55.5% | 96.1% | -2,772 |
 
 Two caveats stated plainly. These runs use `MockLLMClient`, a deterministic
-offline stand-in; the real-model number is not yet measured, and
-`AnthropicLLMClient` is written but unexercised. And share-of-oracle is a weak
+offline stand-in; no real-model figure has been measured, and the live backends
+were only smoke-tested. And share-of-oracle is a weak
 discriminator here -- degrading B2's belief model badly moves it 98.2% -> 98.1%
 -- which is why oracle agreement, regret and waste are reported alongside it.
 
@@ -177,6 +216,103 @@ records; an LLM would have to capture 7.6% of that just to cover its own
 invocation cost, and instead it destroys value. The router is still the right
 architecture -- it is what makes the cost visible and boundable -- but on this
 world model the correct configuration routes nothing.
+
+## Control center
+
+A single self-contained page renders the whole decision flow from the frozen
+benchmark artifacts:
+
+```bash
+python -m scripts.build_ui
+open results/ui/index.html          # no server, no build step, no dependencies
+```
+
+Five screens: **Dashboard** (KPIs and how a decision is made), **Payment
+detail** (a real record, its decision trace, and whether AI was used),
+**Policy performance** (the ladder), **AI economics** (the break-even
+arithmetic), and **Audit trail** (all 2,266 decision nodes, filterable, each
+expandable to its gate chain).
+
+It is generated, not hand-maintained. Every figure is read from
+`results/metrics.json` and `results/b3_audit.jsonl`, and each payment's
+observable fields are regenerated deterministically from
+`generate.build(1200, 7)` — so a number on a card cannot drift away from the
+benchmark it claims to describe. Data is embedded at build time rather than
+fetched, because a page opened over `file://` cannot fetch a sibling JSON file.
+
+The page shows only what a production system would see. The benchmark's answer
+key — `true_reason`, `optimal_action`, `oracle_ev`, `truly_recoverable` — is
+absent by construction, enforced by an allow-list plus an assertion in
+`build_ui.py` and re-checked in `tests/test_ui_artifacts.py`.
+
+## Live processor integration
+
+The recovery engine is not coupled to any payment processor. Its integration
+surface is a single dataclass, `Observation` in `src/schema.py` — 21 observable
+fields. Anything that can be mapped into that shape can drive the engine.
+
+```
+payment.failed webhook
+      │
+      ▼
+processor adapter        ← the only processor-specific code
+      │
+      ▼
+Observation (21 fields)  ← the integration contract
+      │
+      ▼
+rules-first decision engine (B2)
+      │
+   ambiguous?
+      │
+      ▼
+selective AI (B3)  ──▶ compliance gate ──▶ economic gate ──▶ retry-budget gate
+      │                                                            │
+      └────────────── rejected: fall back to rules ◀────────────────┘
+      │
+      ▼
+final action ──▶ provider executor ──▶ audit trail
+```
+
+Everything below `Observation` is processor-agnostic. Supporting a second
+processor means writing a second adapter, not touching the decision engine, the
+gates, or the audit trail.
+
+### Mapping a Razorpay `payment.failed` payload
+
+Illustrative only. **No live Razorpay integration is implemented or tested in
+this repository** — this shows the shape an adapter would take.
+
+| Observation field | source |
+|---|---|
+| `payment_id` | `payload.payment.entity.id` |
+| `amount` | `payload.payment.entity.amount` ÷ 100 (paise → rupees) |
+| `currency` | `payload.payment.entity.currency` |
+| `decline_code` | derived from the payment entity's error fields |
+| `payment_method` | `payload.payment.entity.method` |
+| `day_of_month`, `hour_of_day` | from the event timestamp, in the customer's local time |
+| `mandate_status`, `mandate_cap` | the subscription / mandate record |
+| `active_dispute`, `recent_refund` | merchant-side dispute and refund state |
+
+The remaining fields — `customer_tenure_days`, `prior_successes`,
+`prior_failures`, `days_into_billing_cycle`, `pre_debit_notice_sent`,
+`attempts_already_made`, `subscription_plan_value` — are **not in the webhook**.
+They come from the merchant's own subscription and billing records. That is the
+real integration work, and it is deliberately not faked here.
+
+`attempts_used`, `elapsed_hours` and `update_requests_made` are episode state
+the engine maintains itself and start at zero for a newly failed payment.
+
+### Integration-path smoke test
+
+The decision path was exercised once on a synthetic `Observation` constructed by
+hand — not drawn from the dataset, and not part of the frozen benchmark. It
+returned a complete decision in roughly **18 ms**: an inferred failure cause, a
+chosen action with timing, all four gate verdicts, and a ranked fallback chain.
+
+That is a check that the engine runs on a single arbitrary payment without a
+dataset. It is **not** a benchmark result, a latency guarantee, or evidence of a
+working processor integration.
 
 ## Compliance
 
@@ -256,7 +392,10 @@ not because the check was removed.
 - [x] Evaluation harness and metrics (exact, not sampled)
 - [x] B0 / B1 / B2
 - [x] B3 + audit trail
-- [ ] Charts, video
+- [x] Charts (`results/*.svg`, generated from `metrics.json`)
+- [x] Control-center UI (`results/ui/index.html`)
+- [x] Live-API model backends (Gemini, Nemotron) — smoke-tested, not benchmarked
+- [ ] Demo video
 - [x] Audit the compliance constants against primary sources
 
 ## Running
@@ -265,11 +404,62 @@ not because the check was removed.
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-pytest tests/                                 # observable/hidden separation must hold
-python -m src.generate --n 1200 --seed 7      # writes data/{train,test}.jsonl
-python -m scripts.validate_benchmark          # must pass before trusting results
-python -m scripts.run_all --split test        # the ladder, B0..B3
-python -m scripts.run_all --llm anthropic     # same, against a real model
+pytest -q                                          # all guards, incl. no-leakage
+python -m src.generate --n 1200 --seed 7           # writes data/{train,test}.jsonl
+python -m scripts.validate_benchmark               # degeneracy check
+python -m scripts.run_all --split test --llm mock  # the ladder, B0..B3
+python -m scripts.make_charts                      # results/*.svg
+python -m scripts.build_ui                         # results/ui/index.html
+```
+
+Run modules with `python -m`, not as file paths: `python scripts/run_all.py`
+fails, because the scripts import the `src` package from the repository root.
+
+### Model backends and what has actually been run
+
+`--llm mock` is the default and needs no API key.
+
+| backend | status |
+|---|---|
+| **MockLLM** (`--llm mock`) | **The published benchmark.** Every B0–B3 figure in this README and in `results/` comes from this backend. Deterministic and byte-reproducible. |
+| **Gemini** (`--llm gemini`) | Live **smoke-tested only** — a handful of real calls. Returned a valid structured decision that passed the frozen validator; other calls hit `503 UNAVAILABLE` and a quota `429`. **Not benchmarked.** |
+| **Nemotron via OpenRouter** (`--llm nemotron`) | Live **smoke-tested**, plus a **read-only 100-record validation** over the frozen split that wrote no results. 209 provider calls, 69 successful, the rest `429 RESOURCE_EXHAUSTED`. The full 707-call run was **not attempted**: the free-tier quota is exhausted well before it completes. |
+| **Anthropic** (`--llm anthropic`) | Wired end-to-end, **never run** — needs `pip install anthropic` and an `ANTHROPIC_API_KEY`. |
+
+**No real-model result is substituted into any published number.** The ladder,
+the economics and the audit trail are all MockLLM. A real-model run that hits
+any error rejects itself — it prints the failure count, writes nothing, and
+exits non-zero — so a partly-failed run cannot be mistaken for a completed one.
+
+Real backends need their own SDK and key, neither of which is required to run
+the benchmark: `pip install google-genai` with `GEMINI_API_KEY`, or
+`OPENROUTER_API_KEY` for Nemotron (no SDK — it is plain HTTP). Keys are read
+from the environment and never stored in this repository.
+
+### Retry and concurrency
+
+Real backends retry **only genuinely transient** failures — HTTP 503, a
+rate-limit 429, and connection resets or timeouts — at most **3 attempts** per
+decision, with exponential backoff and jitter. A quota-exhausted 429
+(`RESOURCE_EXHAUSTED`) is treated as **permanent**: retrying cannot succeed and
+would spend more of a budget that is already gone. Malformed output, refusals
+and 4xx errors are never retried; they are answers, not noise.
+
+A retry is the same decision attempt, not a new one. It cannot become a second
+billed call, a second decision node, or a second recovery.
+
+`--concurrency N` (default 4) parallelises provider calls by pre-filling the
+decision cache before evaluation. **Evaluation itself stays sequential**, so
+results and audit ordering do not depend on it.
+
+`run_all` prints the ladder, the per-slice table, and the B3 economics block,
+then writes `results/metrics.json`, `results/ladder.md` and
+`results/b3_audit.jsonl`. Expected tail of a clean mock run:
+
+```
+B2 rules                   98.2%    [97.5, 98.7]     72%      2,273       136     0.00
+B3 router                  96.6%    [94.6, 97.9]     74%      4,242       136     0.00
+  NET BENEFIT vs B2              INR     -2,142   DOES NOT PAY
 ```
 
 ### Layout
@@ -278,10 +468,10 @@ python -m scripts.run_all --llm anthropic     # same, against a real model
 src/            schema, frozen simulator, compliance gate, oracle, generator
 src/policies/   B0-B3, LLM clients. May read Observation only; enforced by tests.
 config/         compliance.yaml, economics.yaml -- every constant in one readable place
-scripts/        validate_benchmark and (later) run_all
-tests/          test_no_leakage.py: AST-level guard against ground-truth access
+scripts/        run_all, validate_benchmark, make_charts, build_ui
+tests/          no-leakage AST guard, gate tests, audit integrity, UI guards
 data/           generated, gitignored, reproducible from seed
-results/        metrics, charts, SIMULATOR_CHANGELOG.md
+results/        metrics.json, ladder.md, b3_audit.jsonl, *.svg, ui/index.html
 ```
 
 ## Known limitations

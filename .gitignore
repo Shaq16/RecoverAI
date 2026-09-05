@@ -10,3 +10,12 @@ data/*.jsonl
 # local noise
 .DS_Store
 .pytest_cache/
+
+# secrets -- never commit a key. The Anthropic SDK reads ANTHROPIC_API_KEY from
+# the environment, so nothing here needs a key file; these rules exist purely so
+# an accidental one cannot be staged by `git add -A`.
+.env
+.env.*
+*.key
+*.pem
+secrets.*

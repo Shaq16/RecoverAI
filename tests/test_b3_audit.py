@@ -335,3 +335,194 @@ def test_mock_backend_is_never_gated_by_the_error_check():
 
 def test_failure_check_tolerates_a_missing_error_key():
     assert real_model_failure({"decision_nodes_routed": 707}, "anthropic") == ""
+
+
+# ---------------------------------------------------------------------------
+# A second real backend must not be able to diverge from the first
+# ---------------------------------------------------------------------------
+
+def test_gemini_backend_shares_the_prompt_and_schema():
+    """
+    A per-provider prompt would quietly turn a model comparison into a prompt
+    comparison, so both real backends must be held to the identical contract.
+    """
+    from src.policies import gemini_client as g
+    from src.policies import llm_client as base
+
+    assert issubclass(g.GeminiLLMClient, base.LLMClient)
+    assert g.SYSTEM_PROMPT is base.SYSTEM_PROMPT
+    assert set(g._GEMINI_SCHEMA["properties"]) == set(base.DECISION_SCHEMA["properties"])
+    assert g._GEMINI_SCHEMA["required"] == base.DECISION_SCHEMA["required"]
+    assert g._GEMINI_SCHEMA["properties"]["action"]["enum"] == list(base.VALID_ACTIONS)
+
+
+def test_every_non_mock_backend_is_gated_by_the_failure_check():
+    """
+    The fail-loud guard keys off the backend name. Adding a provider must not
+    create a path where errors are silently tolerated.
+    """
+    from src.policies import gemini_client as g
+    from src.policies.llm_client import AnthropicLLMClient, MockLLMClient
+
+    for name in (g.GeminiLLMClient.name, AnthropicLLMClient.name):
+        assert name != MockLLMClient.name
+        assert real_model_failure({"llm_errors": 1, "decision_nodes_routed": 10}, name)
+    assert real_model_failure({"llm_errors": 1, "decision_nodes_routed": 10},
+                              MockLLMClient.name) == ""
+
+
+def test_gemini_client_needs_no_key_to_import():
+    """The module must be importable in a clone with no SDK and no credentials."""
+    from src.policies.gemini_client import DEFAULT_MODEL, GeminiLLMClient
+    assert DEFAULT_MODEL and GeminiLLMClient.name == "gemini"
+
+
+# ---------------------------------------------------------------------------
+# OpenRouter / Nemotron provider adapter
+# ---------------------------------------------------------------------------
+
+def test_nemotron_missing_api_key_fails_loudly(monkeypatch):
+    """
+    A keyless run must stop before evaluation starts. Falling back to the mock
+    would publish a rules-only result under a model's name.
+    """
+    from src.policies.openrouter_client import MissingAPIKey, OpenRouterNemotronClient
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(MissingAPIKey) as ei:
+        OpenRouterNemotronClient()
+    msg = str(ei.value)
+    assert "OPENROUTER_API_KEY" in msg
+    assert "never falls back" in msg
+
+
+def test_nemotron_reuses_the_exact_frozen_prompt_and_schema():
+    """The schema is installed as the tool's parameters -- not a copy."""
+    from src.policies import openrouter_client as o
+    from src.policies import llm_client as base
+
+    assert issubclass(o.OpenRouterNemotronClient, base.LLMClient)
+    assert o.SYSTEM_PROMPT is base.SYSTEM_PROMPT
+    assert o.DECISION_TOOL["function"]["parameters"] is base.DECISION_SCHEMA
+    assert o.DEFAULT_MODEL == "nvidia/nemotron-3.5-lightning:free"
+
+
+def test_nemotron_does_not_send_unsupported_response_format(monkeypatch):
+    """
+    The model's supported_parameters do not include response_format, and
+    OpenRouter fails a request carrying an unsupported parameter. Assert the
+    body uses forced tool calling and only supported knobs.
+    """
+    from src.policies.openrouter_client import OpenRouterNemotronClient
+    sent = {}
+    c = OpenRouterNemotronClient(api_key="test-key-not-real")
+    monkeypatch.setattr(c, "_post", lambda body: sent.update(body) or {
+        "choices": [{"message": {"tool_calls": [{"function": {
+            "arguments": '{"action":"ABANDON","delay_hours":0,'
+                         '"confidence":0.5,"rationale":"x"}'}}]}}]})
+    c._decide({"payment_id": "pay_1"})
+    assert "response_format" not in sent
+    assert sent["tool_choice"]["function"]["name"] == "record_recovery_decision"
+
+    # Every tunable key in the body must be one this model actually accepts.
+    # Read from the live OpenRouter models API for
+    # nvidia/nemotron-3.5-lightning:free, which reports exactly:
+    #   include_reasoning, max_tokens, reasoning, seed, temperature,
+    #   tool_choice, tools, top_p
+    # OpenRouter fails a request carrying an unsupported parameter, so this is
+    # the invariant that matters -- not a hand-kept allow-list.
+    SUPPORTED = {"include_reasoning", "max_tokens", "reasoning", "seed",
+                 "temperature", "tool_choice", "tools", "top_p"}
+    STRUCTURAL = {"model", "messages"}          # not tunable parameters
+    unexpected = set(sent) - SUPPORTED - STRUCTURAL
+    assert not unexpected, f"body carries unsupported parameters: {unexpected}"
+
+    # Reasoning is deliberately disabled: this model spends its whole budget
+    # thinking otherwise (292 reasoning tokens on a trivial probe, 9-167s per
+    # decision, sometimes finish_reason=length before answering).
+    assert sent["reasoning"] == {"enabled": False}
+
+
+@pytest.mark.parametrize("resp", [
+    {},                                                    # empty body
+    {"choices": []},                                       # no choice
+    {"choices": [{"message": {}}]},                        # no tool call
+    {"choices": [{"message": {"content": "I cannot help"}}]},   # prose refusal
+    {"choices": [{"message": {"tool_calls": [{"function": {"arguments": "{oops"}}]}}]},
+])
+def test_nemotron_malformed_output_is_counted_and_rejected(resp, monkeypatch):
+    from src.policies.openrouter_client import OpenRouterNemotronClient
+    c = OpenRouterNemotronClient(api_key="test-key-not-real")
+    monkeypatch.setattr(c, "_post", lambda body: resp)
+    d = c._decide({"payment_id": "pay_1"})
+    assert d.malformed and c.errors == 1
+    assert real_model_failure({"llm_errors": c.errors, "decision_nodes_routed": 1},
+                              c.name)
+
+
+def test_nemotron_api_error_is_counted_not_swallowed(monkeypatch):
+    from src.policies.openrouter_client import OpenRouterNemotronClient
+    c = OpenRouterNemotronClient(api_key="test-key-not-real")
+
+    def boom(body):
+        raise ConnectionResetError("connection reset")
+    monkeypatch.setattr(c, "_post", boom)
+    d = c._decide({"payment_id": "pay_1"})
+    assert d.malformed and c.errors == 1
+    assert "ConnectionResetError" in d.rationale
+
+
+def test_nemotron_accepts_arguments_as_string_or_object(monkeypatch):
+    """OpenRouter's docs do not state which; both must work."""
+    from src.policies.openrouter_client import OpenRouterNemotronClient
+    obj = {"action": "RETRY_LATER", "delay_hours": 24,
+           "confidence": 0.8, "rationale": "funds likely to land"}
+    for args in (obj, json.dumps(obj)):
+        c = OpenRouterNemotronClient(api_key="test-key-not-real")
+        monkeypatch.setattr(c, "_post", lambda body: {
+            "choices": [{"message": {"tool_calls": [{"function": {"arguments": args}}]}}]})
+        d = c._decide({"payment_id": "pay_1"})
+        assert not d.malformed and d.action == "RETRY_LATER" and d.delay_hours == 24
+        assert c.errors == 0
+
+
+def test_nemotron_output_still_goes_through_the_frozen_validation(monkeypatch):
+    """A confident but invalid action must be rejected by _coerce, not trusted."""
+    from src.policies.openrouter_client import OpenRouterNemotronClient
+    c = OpenRouterNemotronClient(api_key="test-key-not-real")
+    monkeypatch.setattr(c, "_post", lambda body: {
+        "choices": [{"message": {"tool_calls": [{"function": {"arguments":
+            '{"action":"REFUND_EVERYTHING","delay_hours":0,'
+            '"confidence":0.99,"rationale":"trust me"}'}}]}}]})
+    d = c._decide({"payment_id": "pay_1"})
+    assert d.malformed and d.action == "ABANDON"
+
+
+def test_nemotron_never_silently_becomes_the_mock():
+    from src.policies.openrouter_client import OpenRouterNemotronClient
+    from src.policies.llm_client import MockLLMClient
+    assert OpenRouterNemotronClient.name == "nemotron" != MockLLMClient.name
+    assert real_model_failure({"llm_errors": 1, "decision_nodes_routed": 5},
+                              OpenRouterNemotronClient.name)
+    assert not issubclass(OpenRouterNemotronClient, MockLLMClient)
+
+
+def test_api_key_never_appears_in_the_module_or_an_error(monkeypatch):
+    """The key lives only in a request header, never in output."""
+    from src.policies.openrouter_client import OpenRouterNemotronClient
+    import src.policies.openrouter_client as mod
+    src = open(mod.__file__).read()
+    # The env var NAME appears in the help text ("export OPENROUTER_API_KEY=...")
+    # which is correct and not a leak. What must not appear is a key-shaped
+    # literal, or an assignment of one.
+    import re
+    assert not re.search(r'sk-or-v1-[A-Za-z0-9_-]{8,}', src)
+    assert not re.search(r'_key\s*=\s*["\'][A-Za-z0-9_-]{20,}["\']', src)
+
+    secret = "sk-or-v1-DO-NOT-LEAK-ME"
+    c = OpenRouterNemotronClient(api_key=secret)
+
+    def boom(body):
+        raise RuntimeError("upstream exploded")
+    monkeypatch.setattr(c, "_post", boom)
+    d = c._decide({"payment_id": "pay_1"})
+    assert secret not in d.rationale and secret not in repr(d)
